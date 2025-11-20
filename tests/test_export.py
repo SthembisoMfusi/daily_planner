@@ -41,11 +41,20 @@ class TestExport(unittest.TestCase):
             MockRow(date(2023, 1, 8), "G2", "Cat2", "Act2", 2, 0)
         ]
         
-        mock_session.query.return_value.join.return_value.order_by.return_value.all.return_value = mock_data
+        # Mock query chain
+        mock_query = mock_session.query.return_value.join.return_value.order_by.return_value
+        # Ensure filter returns the same query object (fluent interface)
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = mock_data
         
         # Run export
         filename = "test_export.xlsx"
-        success, msg = export_to_excel(filename=filename)
+        # Export from Jan 1st to Jan 10th (covers both sessions)
+        success, msg = export_to_excel(
+            start_date=date(2023, 1, 1), 
+            end_date=date(2023, 1, 10), 
+            filename=filename
+        )
         
         self.assertTrue(success, msg)
         expected_path = os.path.join("exports", filename)

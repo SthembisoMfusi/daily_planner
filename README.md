@@ -7,6 +7,17 @@ A modern, terminal-based (soon to be GUI) daily planner application for logging 
 1. **Prerequisites**:
    - Python 3.8+
    - PostgreSQL
+   - **Linux Users**: `libmpv` is required.
+     - **Ubuntu/Debian**:
+       ```bash
+       sudo apt-get install libmpv-dev libmpv1
+       ```
+     - **Arch Linux**:
+       ```bash
+       sudo pacman -S mpv
+       # If you see "libmpv.so.1: cannot open shared object file":
+       sudo ln -s /usr/lib/libmpv.so /usr/lib/libmpv.so.1
+       ```
 
 2. **Installation**:
    ```bash

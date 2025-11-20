@@ -47,7 +47,7 @@ def main(page: ft.Page):
         for day in weekdays:
             calendar_grid.controls.append(
                 ft.Container(
-                    content=ft.Text(day, color=ft.colors.GREEN_400, weight=ft.FontWeight.BOLD),
+                    content=ft.Text(day, color=ft.Colors.GREEN_400, weight=ft.FontWeight.BOLD),
                     alignment=ft.alignment.center
                 )
             )
@@ -67,8 +67,8 @@ def main(page: ft.Page):
             is_logged = len(sessions) > 0
             
             btn_style = ft.ButtonStyle(
-                bgcolor=ft.colors.GREEN_900 if is_logged else ft.colors.SURFACE_VARIANT,
-                color=ft.colors.WHITE,
+                bgcolor=ft.Colors.GREEN_900 if is_logged else ft.Colors.GREY_800,
+                color=ft.Colors.WHITE,
                 shape=ft.RoundedRectangleBorder(radius=8),
             )
             
@@ -113,7 +113,7 @@ def main(page: ft.Page):
                     ft.ListTile(
                         title=ft.Text(f"{s.group_name} - {s.category}"),
                         subtitle=ft.Text(f"{s.activity_description}\nDuration: {s.duration_hours}h {s.duration_minutes}m"),
-                        leading=ft.Icon(ft.icons.EVENT_NOTE),
+                        leading=ft.Icon(ft.Icons.EVENT_NOTE),
                     )
                 )
             page.update()
@@ -173,33 +173,77 @@ def main(page: ft.Page):
             ),
             actions=[
                 ft.TextButton("Close", on_click=lambda e: page.close(dlg)),
-                ft.ElevatedButton("Log Session", on_click=log_session, bgcolor=ft.colors.GREEN_600, color=ft.colors.WHITE),
+                ft.ElevatedButton("Log Session", on_click=log_session, bgcolor=ft.Colors.GREEN_600, color=ft.Colors.WHITE),
             ],
         )
         page.open(dlg)
 
     def open_export_dialog(e):
-        weeks_input = ft.TextField(label="Number of Weeks", value="1", width=100)
-        
-        def export_action(e):
-            try:
-                weeks = int(weeks_input.value)
-            except ValueError:
-                page.snack_bar = ft.SnackBar(ft.Text("Invalid number of weeks"))
-                page.snack_bar.open = True
+        # State for date pickers
+        start_date_value = current_month
+        end_date_value = date.today()
+
+        start_date_text = ft.Text(start_date_value.strftime("%Y-%m-%d"))
+        end_date_text = ft.Text(end_date_value.strftime("%Y-%m-%d"))
+
+        def handle_start_change(e):
+            nonlocal start_date_value
+            if e.control.value:
+                start_date_value = e.control.value.date()
+                start_date_text.value = start_date_value.strftime("%Y-%m-%d")
                 page.update()
-                return
+
+        def handle_end_change(e):
+            nonlocal end_date_value
+            if e.control.value:
+                end_date_value = e.control.value.date()
+                end_date_text.value = end_date_value.strftime("%Y-%m-%d")
+                page.update()
+
+        start_picker = ft.DatePicker(
+            on_change=handle_start_change,
+            value=start_date_value,
+            first_date=datetime(2020, 1, 1),
+            last_date=datetime(2030, 12, 31),
+        )
+        end_picker = ft.DatePicker(
+            on_change=handle_end_change,
+            value=end_date_value,
+            first_date=datetime(2020, 1, 1),
+            last_date=datetime(2030, 12, 31),
+        )
+        
+        # Register pickers
+        page.overlay.append(start_picker)
+        page.overlay.append(end_picker)
+
+        def set_range(option):
+            nonlocal start_date_value, end_date_value
+            today = date.today()
             
-            # Export starting from current month view (first day)
-            # Or maybe just "From Today"? Let's do "From Today" for simplicity as requested "how many weeks"
-            # But user might want past data.
-            # Let's assume "From the start of the currently viewed month" is a good default, 
-            # or just "All data" if we don't filter. 
-            # The user asked "choose how many weeks they want to make an excel file for".
-            # Implicitly this implies "recent" or "upcoming". 
-            # Let's use the `current_month` as the start date.
+            if option == "This Month":
+                start_date_value = today.replace(day=1)
+                end_date_value = today
+            elif option == "Last Month":
+                last_month_end = today.replace(day=1) - timedelta(days=1)
+                start_date_value = last_month_end.replace(day=1)
+                end_date_value = last_month_end
+            elif option == "Last 3 Months":
+                start_date_value = today - timedelta(days=90)
+                end_date_value = today
+            elif option == "All Time":
+                start_date_value = date(2020, 1, 1)
+                end_date_value = today
             
-            success, msg = export_to_excel(start_date=current_month, num_weeks=weeks)
+            # Update UI
+            start_date_text.value = start_date_value.strftime("%Y-%m-%d")
+            end_date_text.value = end_date_value.strftime("%Y-%m-%d")
+            start_picker.value = start_date_value
+            end_picker.value = end_date_value
+            page.update()
+
+        def export_action(e):
+            success, msg = export_to_excel(start_date=start_date_value, end_date=end_date_value)
             
             page.snack_bar = ft.SnackBar(ft.Text(msg))
             page.snack_bar.open = True
@@ -209,15 +253,47 @@ def main(page: ft.Page):
         dlg = ft.AlertDialog(
             title=ft.Text("Export to Excel"),
             content=ft.Column(
-                height=100,
+                height=300,
+                width=400,
                 controls=[
-                    ft.Text(f"Exporting starting from {current_month.strftime('%B %Y')}"),
-                    weeks_input
+                    ft.Text("Select Date Range", weight=ft.FontWeight.BOLD),
+                    ft.Row([
+                        ft.Column([
+                            ft.Text("Start Date"),
+                            ft.ElevatedButton(
+                                "Pick Date",
+                                icon=ft.Icons.CALENDAR_MONTH,
+                                on_click=lambda _: start_picker.pick_date()
+                            ),
+                            start_date_text
+                        ]),
+                        ft.Column([
+                            ft.Text("End Date"),
+                            ft.ElevatedButton(
+                                "Pick Date",
+                                icon=ft.Icons.CALENDAR_MONTH,
+                                on_click=lambda _: end_picker.pick_date()
+                            ),
+                            end_date_text
+                        ])
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Divider(),
+                    ft.Text("Quick Select", weight=ft.FontWeight.BOLD),
+                    ft.Row(
+                        wrap=True,
+                        spacing=10,
+                        controls=[
+                            ft.Chip(label=ft.Text("This Month"), on_click=lambda e: set_range("This Month")),
+                            ft.Chip(label=ft.Text("Last Month"), on_click=lambda e: set_range("Last Month")),
+                            ft.Chip(label=ft.Text("Last 3 Months"), on_click=lambda e: set_range("Last 3 Months")),
+                            ft.Chip(label=ft.Text("All Time"), on_click=lambda e: set_range("All Time")),
+                        ]
+                    )
                 ]
             ),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda e: page.close(dlg)),
-                ft.ElevatedButton("Export", on_click=export_action, bgcolor=ft.colors.GREEN_600, color=ft.colors.WHITE),
+                ft.ElevatedButton("Export", on_click=export_action, bgcolor=ft.Colors.GREEN_600, color=ft.Colors.WHITE),
             ],
         )
         page.open(dlg)
@@ -225,11 +301,11 @@ def main(page: ft.Page):
     # Layout
     header = ft.Row(
         controls=[
-            ft.IconButton(ft.icons.CHEVRON_LEFT, on_click=lambda e: change_month(-1)),
+            ft.IconButton(ft.Icons.CHEVRON_LEFT, on_click=lambda e: change_month(-1)),
             month_label,
-            ft.IconButton(ft.icons.CHEVRON_RIGHT, on_click=lambda e: change_month(1)),
+            ft.IconButton(ft.Icons.CHEVRON_RIGHT, on_click=lambda e: change_month(1)),
             ft.Container(expand=True), # Spacer
-            ft.ElevatedButton("Export", icon=ft.icons.DOWNLOAD, on_click=open_export_dialog, bgcolor=ft.colors.GREEN_700, color=ft.colors.WHITE)
+            ft.ElevatedButton("Export", icon=ft.Icons.DOWNLOAD, on_click=open_export_dialog, bgcolor=ft.Colors.GREEN_700, color=ft.Colors.WHITE)
         ],
         alignment=ft.MainAxisAlignment.START,
     )

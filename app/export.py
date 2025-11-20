@@ -9,13 +9,13 @@ from sqlalchemy.orm import Session, sessionmaker
 from .database import get_engine, MentorshipSession, DayLog
 from datetime import datetime, timedelta, date
 
-def export_to_excel(start_date: date = None, num_weeks: int = None, filename: str = None) -> tuple[bool, str]:
+def export_to_excel(start_date: date = None, end_date: date = None, filename: str = None) -> tuple[bool, str]:
     """
     Exports mentorship sessions to an Excel file.
 
     Args:
         start_date (date, optional): The start date for the export. Defaults to None (all time).
-        num_weeks (int, optional): Number of weeks to export from start_date. Defaults to None.
+        end_date (date, optional): The end date for the export. Defaults to None.
         filename (str, optional): The filename for the export. Defaults to "mentorship_log.xlsx".
 
     Returns:
@@ -35,9 +35,12 @@ def export_to_excel(start_date: date = None, num_weeks: int = None, filename: st
                 MentorshipSession.duration_minutes
             ).join(MentorshipSession).order_by(DayLog.date)
 
-            if start_date and num_weeks:
-                end_date = start_date + timedelta(weeks=num_weeks)
-                query = query.filter(DayLog.date >= start_date, DayLog.date < end_date)
+            if start_date:
+                query = query.filter(DayLog.date >= start_date)
+            
+            if end_date:
+                # Inclusive of the end date
+                query = query.filter(DayLog.date <= end_date)
             
             results = query.all()
     except Exception as e:
