@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from .database import get_engine, MentorshipSession, DayLog
 from datetime import datetime, timedelta, date
 
-def export_to_excel(start_date: date = None, end_date: date = None, filename: str = None) -> tuple[bool, str]:
+def export_to_excel(start_date: date = None, end_date: date = None, filename: str = None, separate_sheets: bool = True) -> tuple[bool, str]:
     """
     Exports mentorship sessions to an Excel file.
 
@@ -17,6 +17,7 @@ def export_to_excel(start_date: date = None, end_date: date = None, filename: st
         start_date (date, optional): The start date for the export. Defaults to None (all time).
         end_date (date, optional): The end date for the export. Defaults to None.
         filename (str, optional): The filename for the export. Defaults to "mentorship_log.xlsx".
+        separate_sheets (bool, optional): If True, creates separate sheets per week. If False, creates a single sheet. Defaults to True.
 
     Returns:
         tuple[bool, str]: A tuple containing success status (True/False) and a message.
@@ -79,16 +80,20 @@ def export_to_excel(start_date: date = None, end_date: date = None, filename: st
     
     filepath = os.path.join(export_dir, filename)
 
-    # Write to Excel with separate sheets for each week
+    # Write to Excel
     try:
         with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
-            # Get unique weeks
-            weeks = df['Week'].unique()
-            for week in weeks:
-                week_df = df[df['Week'] == week].drop(columns=['Week'])
-                # Sheet name length limit is 31 chars
-                sheet_name = week[:31] 
-                week_df.to_excel(writer, sheet_name=sheet_name, index=False)
+            if separate_sheets:
+                # Separate sheets for each week
+                weeks = df['Week'].unique()
+                for week in weeks:
+                    week_df = df[df['Week'] == week].drop(columns=['Week'])
+                    # Sheet name length limit is 31 chars
+                    sheet_name = week[:31] 
+                    week_df.to_excel(writer, sheet_name=sheet_name, index=False)
+            else:
+                # Single sheet with all data
+                df.to_excel(writer, sheet_name="All Sessions", index=False)
         return True, f"Exported to {filepath}"
     except Exception as e:
         return False, str(e)

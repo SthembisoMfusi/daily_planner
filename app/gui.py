@@ -243,17 +243,38 @@ def main(page: ft.Page):
             page.update()
 
         def export_action(e):
-            success, msg = export_to_excel(start_date=start_date_value, end_date=end_date_value)
+            # Determine if we should use separate sheets
+            use_separate_sheets = True
+            if (end_date_value - start_date_value).days > 7:
+                use_separate_sheets = sheet_option.value == "separate"
+            
+            success, msg = export_to_excel(
+                start_date=start_date_value, 
+                end_date=end_date_value,
+                separate_sheets=use_separate_sheets
+            )
             
             page.snack_bar = ft.SnackBar(ft.Text(msg))
             page.snack_bar.open = True
             page.close(dlg)
             page.update()
 
+        # Sheet option selector (only shown if date range > 7 days)
+        sheet_option = ft.RadioGroup(
+            content=ft.Column([
+                ft.Radio(value="separate", label="Separate sheets per week"),
+                ft.Radio(value="single", label="Single sheet with all data")
+            ]),
+            value="separate"
+        )
+
+        # Calculate if we need to show the sheet option
+        show_sheet_option = (end_date_value - start_date_value).days > 7
+
         dlg = ft.AlertDialog(
             title=ft.Text("Export to Excel"),
             content=ft.Column(
-                height=300,
+                height=400 if show_sheet_option else 300,
                 width=400,
                 controls=[
                     ft.Text("Select Date Range", weight=ft.FontWeight.BOLD),
@@ -263,7 +284,7 @@ def main(page: ft.Page):
                             ft.ElevatedButton(
                                 "Pick Date",
                                 icon=ft.Icons.CALENDAR_MONTH,
-                                on_click=lambda _: start_picker.pick_date()
+                                on_click=lambda _: page.open(start_picker)
                             ),
                             start_date_text
                         ]),
@@ -272,7 +293,7 @@ def main(page: ft.Page):
                             ft.ElevatedButton(
                                 "Pick Date",
                                 icon=ft.Icons.CALENDAR_MONTH,
-                                on_click=lambda _: end_picker.pick_date()
+                                on_click=lambda _: page.open(end_picker)
                             ),
                             end_date_text
                         ])
@@ -288,8 +309,8 @@ def main(page: ft.Page):
                             ft.Chip(label=ft.Text("Last 3 Months"), on_click=lambda e: set_range("Last 3 Months")),
                             ft.Chip(label=ft.Text("All Time"), on_click=lambda e: set_range("All Time")),
                         ]
-                    )
-                ]
+                    ),
+                ] + ([ft.Divider(), ft.Text("Export Options", weight=ft.FontWeight.BOLD), sheet_option] if show_sheet_option else [])
             ),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda e: page.close(dlg)),
