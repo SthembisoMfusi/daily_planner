@@ -5,5 +5,6 @@ from .crud import (
     update_day_log_notes,
     add_mentorship_session,
     get_sessions_for_day,
-    delete_session
+    delete_session,
+    update_mentorship_session
 )

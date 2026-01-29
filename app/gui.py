@@ -1,12 +1,15 @@
 import flet as ft
 from datetime import date, timedelta, datetime
-from app.database import get_db, get_sessions_for_day, add_mentorship_session
+from app.database import get_db, get_sessions_for_day, add_mentorship_session, update_mentorship_session
 from app.config import SESSION_CATEGORIES
 from app.export import export_to_excel
 
 def main(page: ft.Page):
     """
-    Main entry point for the Flet GUI.
+    Main entry point for the Flet GUI application.
+
+    Args:
+        page (ft.Page): The Flet page instance used to render the UI.
     """
     page.title = "Daily Planner"
     page.theme_mode = ft.ThemeMode.DARK
@@ -18,6 +21,19 @@ def main(page: ft.Page):
     current_month = date.today().replace(day=1)
     
     # Components
+    
+    # Weekday Headers (Fixed at top)
+    weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    weekday_row = ft.Row(
+        controls=[
+            ft.Container(
+                content=ft.Text(day, color=ft.Colors.GREEN_400, weight=ft.FontWeight.BOLD),
+                alignment=ft.Alignment(0, 0),
+                expand=True
+            ) for day in weekdays
+        ],
+        alignment=ft.MainAxisAlignment.SPACE_EVENLY
+    )
     calendar_grid = ft.GridView(
         expand=True,
         runs_count=7,
@@ -34,25 +50,31 @@ def main(page: ft.Page):
         text_align=ft.TextAlign.CENTER
     )
 
-    def get_days_in_month(d: date):
+    def get_days_in_month(d: date) -> int:
+        """
+        Calculates the number of days in the month of the given date.
+
+        Args:
+            d (date): The date object containing the month and year to check.
+
+        Returns:
+            int: The number of days in the month.
+        """
         next_month = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
         return (next_month - d).days
 
     def update_calendar():
+        """
+        Refresh the calendar grid to show days for the current selected month.
+        
+        This function clears the current grid and repopulates it with:
+        - Empty slots for days before the 1st of the month.
+        - Buttons for each day of the month, colored green if sessions exist.
+        """
         month_label.value = current_month.strftime("%B %Y")
         calendar_grid.controls.clear()
         
-        # Weekday headers
-        weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        for day in weekdays:
-            calendar_grid.controls.append(
-                ft.Container(
-                    content=ft.Text(day, color=ft.Colors.GREEN_400, weight=ft.FontWeight.BOLD),
-                    alignment=ft.alignment.center
-                )
-            )
-        
-        # Empty slots
+        # Empty slots for the start of the month
         start_weekday = current_month.weekday()
         for _ in range(start_weekday):
             calendar_grid.controls.append(ft.Container())
@@ -74,7 +96,7 @@ def main(page: ft.Page):
             
             calendar_grid.controls.append(
                 ft.ElevatedButton(
-                    text=str(d),
+                    str(d),
                     style=btn_style,
                     on_click=lambda e, date=day_date: open_day_view(date)
                 )
@@ -82,7 +104,13 @@ def main(page: ft.Page):
         
         page.update()
 
-    def change_month(delta):
+    def change_month(delta: int):
+        """
+        Changes the currently viewed month by a given delta.
+
+        Args:
+            delta (int): The number of months to move. +1 for next month, -1 for previous.
+        """
         nonlocal current_month
         if delta > 0:
             current_month = (current_month.replace(day=28) + timedelta(days=4)).replace(day=1)
@@ -90,7 +118,13 @@ def main(page: ft.Page):
             current_month = (current_month.replace(day=1) - timedelta(days=1)).replace(day=1)
         update_calendar()
 
-    def open_day_view(day_date):
+    def open_day_view(day_date: date):
+        """
+        Opens a dialog to view and log sessions for a specific date.
+
+        Args:
+            day_date (date): The date to view.
+        """
         # Form Controls
         group_input = ft.TextField(label="Group Number or Name", expand=True)
         category_dropdown = ft.Dropdown(
@@ -103,8 +137,44 @@ def main(page: ft.Page):
         minutes_input = ft.TextField(label="Minutes", value="0", width=100)
         
         session_list = ft.Column(scroll=ft.ScrollMode.AUTO, height=200)
+        
+        # Edit state
+        editing_session_id = None
+        log_button = ft.ElevatedButton("Log Session", on_click=lambda e: log_session(e), bgcolor=ft.Colors.GREEN_600, color=ft.Colors.WHITE)
+        cancel_edit_btn = ft.TextButton("Cancel Edit", visible=False)
+
+        def reset_form():
+            nonlocal editing_session_id
+            editing_session_id = None
+            group_input.value = ""
+            category_dropdown.value = None
+            activity_input.value = ""
+            hours_input.value = "0"
+            minutes_input.value = "0"
+            log_button.text = "Log Session"
+            log_button.bgcolor = ft.Colors.GREEN_600
+            cancel_edit_btn.visible = False
+            page.update()
+
+        def load_session_for_edit(session):
+            nonlocal editing_session_id
+            editing_session_id = session.id
+            group_input.value = session.group_name
+            category_dropdown.value = session.category
+            activity_input.value = session.activity_description
+            hours_input.value = str(session.duration_hours)
+            minutes_input.value = str(session.duration_minutes)
+            
+            log_button.text = "Update Session"
+            log_button.bgcolor = ft.Colors.ORANGE_700
+            cancel_edit_btn.visible = True
+            cancel_edit_btn.on_click = lambda e: reset_form()
+            page.update()
 
         def refresh_sessions():
+            """
+            Fetches sessions for the selected day from the database and updates the list in the dialog.
+            """
             session_list.controls.clear()
             db = next(get_db())
             sessions = get_sessions_for_day(db, day_date)
@@ -114,11 +184,21 @@ def main(page: ft.Page):
                         title=ft.Text(f"{s.group_name} - {s.category}"),
                         subtitle=ft.Text(f"{s.activity_description}\nDuration: {s.duration_hours}h {s.duration_minutes}m"),
                         leading=ft.Icon(ft.Icons.EVENT_NOTE),
+                        trailing=ft.IconButton(
+                            ft.Icons.EDIT, 
+                            tooltip="Edit Session",
+                            on_click=lambda e, session=s: load_session_for_edit(session)
+                        )
                     )
                 )
             page.update()
 
         def log_session(e):
+            """
+            Callback to log a new session when the 'Log Session' button is clicked.
+            
+            Validates input and saves the session to the database.
+            """
             if not group_input.value or not category_dropdown.value:
                 page.snack_bar = ft.SnackBar(ft.Text("Please fill in Group and Category"))
                 page.snack_bar.open = True
@@ -126,8 +206,8 @@ def main(page: ft.Page):
                 return
 
             try:
-                h = int(hours_input.value)
-                m = int(minutes_input.value)
+                hours_part = int(hours_input.value)
+                mins_part = int(minutes_input.value)
             except ValueError:
                 page.snack_bar = ft.SnackBar(ft.Text("Duration must be numbers"))
                 page.snack_bar.open = True
@@ -135,24 +215,31 @@ def main(page: ft.Page):
                 return
 
             db = next(get_db())
-            add_mentorship_session(
-                db, day_date, 
-                group_input.value, 
-                category_dropdown.value, 
-                activity_input.value, 
-                h, m
-            )
             
-            # Clear inputs
-            group_input.value = ""
-            activity_input.value = ""
-            hours_input.value = "0"
-            minutes_input.value = "0"
+            if editing_session_id:
+                update_mentorship_session(
+                    db, editing_session_id,
+                    group_input.value, 
+                    category_dropdown.value, 
+                    activity_input.value, 
+                    hours_part, mins_part
+                )
+                msg = "Session Updated!"
+            else:
+                add_mentorship_session(
+                    db, day_date, 
+                    group_input.value, 
+                    category_dropdown.value, 
+                    activity_input.value, 
+                    hours_part, mins_part
+                )
+                msg = "Session Logged!"
             
+            page.snack_bar = ft.SnackBar(ft.Text(msg))
+            page.snack_bar.open = True
+            reset_form()
             refresh_sessions()
             update_calendar() # Update main calendar to show green status
-            page.snack_bar = ft.SnackBar(ft.Text("Session Logged!"))
-            page.snack_bar.open = True
             page.update()
 
         refresh_sessions()
@@ -172,13 +259,19 @@ def main(page: ft.Page):
                 scroll=ft.ScrollMode.AUTO
             ),
             actions=[
-                ft.TextButton("Close", on_click=lambda e: page.close(dlg)),
-                ft.ElevatedButton("Log Session", on_click=log_session, bgcolor=ft.Colors.GREEN_600, color=ft.Colors.WHITE),
+                ft.TextButton("Close", on_click=lambda e: (setattr(dlg, 'open', False), page.update())),
+                cancel_edit_btn,
+                log_button,
             ],
         )
-        page.open(dlg)
+        page.overlay.append(dlg)
+        dlg.open = True
+        page.update()
 
     def open_export_dialog(e):
+        """
+        Opens a dialog to configure and perform data export to Excel.
+        """
         # State for date pickers
         start_date_value = current_month
         end_date_value = date.today()
@@ -238,8 +331,10 @@ def main(page: ft.Page):
             # Update UI
             start_date_text.value = start_date_value.strftime("%Y-%m-%d")
             end_date_text.value = end_date_value.strftime("%Y-%m-%d")
-            start_picker.value = start_date_value
-            end_picker.value = end_date_value
+            # For DatePicker, we don't set value directly like this if it is already open or attached
+            # But here we are just updating internal state before opening
+            # start_picker.value = start_date_value 
+            # end_picker.value = end_date_value
             page.update()
 
         def export_action(e):
@@ -256,7 +351,7 @@ def main(page: ft.Page):
             
             page.snack_bar = ft.SnackBar(ft.Text(msg))
             page.snack_bar.open = True
-            page.close(dlg)
+            dlg.open = False
             page.update()
 
         # Sheet option selector (only shown if date range > 7 days)
@@ -284,7 +379,7 @@ def main(page: ft.Page):
                             ft.ElevatedButton(
                                 "Pick Date",
                                 icon=ft.Icons.CALENDAR_MONTH,
-                                on_click=lambda _: page.open(start_picker)
+                                on_click=lambda _: (setattr(start_picker, "open", True), page.update())
                             ),
                             start_date_text
                         ]),
@@ -293,7 +388,7 @@ def main(page: ft.Page):
                             ft.ElevatedButton(
                                 "Pick Date",
                                 icon=ft.Icons.CALENDAR_MONTH,
-                                on_click=lambda _: page.open(end_picker)
+                                on_click=lambda _: (setattr(end_picker, "open", True), page.update())
                             ),
                             end_date_text
                         ])
@@ -313,11 +408,13 @@ def main(page: ft.Page):
                 ] + ([ft.Divider(), ft.Text("Export Options", weight=ft.FontWeight.BOLD), sheet_option] if show_sheet_option else [])
             ),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda e: page.close(dlg)),
+                ft.TextButton("Cancel", on_click=lambda e: (setattr(dlg, 'open', False), page.update())),
                 ft.ElevatedButton("Export", on_click=export_action, bgcolor=ft.Colors.GREEN_600, color=ft.Colors.WHITE),
             ],
         )
-        page.open(dlg)
+        page.overlay.append(dlg)
+        dlg.open = True
+        page.update()
 
     # Layout
     header = ft.Row(
@@ -336,6 +433,7 @@ def main(page: ft.Page):
             controls=[
                 header,
                 ft.Divider(),
+                weekday_row,
                 calendar_grid
             ],
             expand=True

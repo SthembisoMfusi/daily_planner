@@ -9,8 +9,10 @@ A modern, terminal-based (soon to be GUI) daily planner application for logging 
    - PostgreSQL
    - **Linux Users**: `libmpv` is required.
      - **Ubuntu/Debian**:
-       ```bash
-       sudo apt-get install libmpv-dev libmpv1
+       # For Ubuntu 24.04+ / Pop!_OS 24.04+
+       sudo apt-get install libmpv-dev libmpv2
+       # For older versions:
+       # sudo apt-get install libmpv-dev libmpv1
        ```
      - **Arch Linux**:
        ```bash

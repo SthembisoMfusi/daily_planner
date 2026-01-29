@@ -11,16 +11,32 @@ from datetime import datetime, timedelta, date
 
 def export_to_excel(start_date: date = None, end_date: date = None, filename: str = None, separate_sheets: bool = True) -> tuple[bool, str]:
     """
-    Exports mentorship sessions to an Excel file.
+    Exports mentorship sessions from the database to an Excel file.
+
+    This function queries the database for sessions within the specified date range 
+    and writes them to an Excel file using pandas. It supports data retrieval for 
+    specific periods and organizing the data into separate sheets by week.
 
     Args:
-        start_date (date, optional): The start date for the export. Defaults to None (all time).
-        end_date (date, optional): The end date for the export. Defaults to None.
-        filename (str, optional): The filename for the export. Defaults to "mentorship_log.xlsx".
-        separate_sheets (bool, optional): If True, creates separate sheets per week. If False, creates a single sheet. Defaults to True.
+        start_date (date, optional): The start date for filtering sessions. 
+                                     If None, includes sessions from the beginning of time. 
+                                     Defaults to None.
+        end_date (date, optional): The end date for filtering sessions (inclusive). 
+                                   If None, checks up to the current date/last entry. 
+                                   Defaults to None.
+        filename (str, optional): The name of the output Excel file. 
+                                  If None, a timestamped filename is generated 
+                                  (e.g., "mentorship_log_YYYYMMDD_HHMMSS.xlsx"). 
+                                  Defaults to None.
+        separate_sheets (bool, optional): Configuration to split data into weekly sheets.
+                                          - If True, creates a separate worksheet for each week.
+                                          - If False, puts all data into a single "All Sessions" sheet.
+                                          Defaults to True.
 
     Returns:
-        tuple[bool, str]: A tuple containing success status (True/False) and a message.
+        tuple[bool, str]: A tuple containing:
+                          - bool: True if the export was successful, False otherwise.
+                          - str: A success message with the filepath or an error description.
     """
     engine = get_engine()
     SessionLocal = sessionmaker(bind=engine)

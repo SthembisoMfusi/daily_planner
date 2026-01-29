@@ -58,13 +58,25 @@ class MentorshipSession(Base):
     day_log = relationship("DayLog", back_populates="sessions")
 
 def get_engine():
-    """Creates and returns the SQLAlchemy engine."""
+    """
+    Creates and returns the SQLAlchemy engine.
+    
+    Returns:
+        Engine: The SQLAlchemy engine connected to the database.
+
+    Raises:
+        ValueError: If the DATABASE_URL environment variable is not set.
+    """
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL environment variable is not set.")
     return create_engine(DATABASE_URL)
 
 def init_db():
-    """Initializes the database by creating all tables."""
+    """
+    Initializes the database schema.
+    
+    Creates all tables defined in the Base metadata if they do not already exist.
+    """
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
 
